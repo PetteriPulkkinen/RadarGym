@@ -1,0 +1,3 @@
+.vscode/**/*
+radar_gym.egg_info/**/*
+**/__pycache__/**/*
