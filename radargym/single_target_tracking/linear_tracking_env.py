@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-class LinearTrackingEnv(gym.Env):
+class LinearTrackingDiscrete(gym.Env):
     metadata = {'render.modes': ['human']}
 
     LOCKED = 3
@@ -29,8 +29,10 @@ class LinearTrackingEnv(gym.Env):
         self.beam = np.zeros(2, dtype=int)
 
         self.image = None
+        self.marker = None
         self.ax = None
         self.visualization = np.zeros((grid_size, grid_size), dtype=int)
+        self._vis_pos = np.zeros(2)
 
     def step(self, action):
         self._update_beam(action)
@@ -56,22 +58,31 @@ class LinearTrackingEnv(gym.Env):
     def reset(self):
         self._reset_target()
         self._update_observation()
-        self._n_obs = 0 
+        self._n_obs = 0
         return self.obs
 
     def render(self, mode='human', close=False):
         if self.image == None:
             self.ax = plt.subplot(111)
-            self.image = plt.imshow(self.visualization.T, vmin=0, vmax=3, cmap='jet')
+            self.image = plt.imshow(
+                self.visualization.T,
+                vmin=0,
+                vmax=3,
+                cmap='jet',
+                origin='botton',
+                extent=(0, 1, 0, 1)
+            )
+            self.marker = plt.plot(*tuple(self._vis_pos), 'or', MarkerSize=20).pop()
         else:
             self.image.set_data(self.visualization.T)
+            self.marker.set_data(*tuple(self._vis_pos))
         self.ax.set_title(str(self._n_obs))
         plt.show(block=False)
 
     def _move_target(self):
         self.position = self.position  + self.time_delta * self.velocity
         self._update_cell()
-    
+
     def _reset_target(self):
         self.position = np.random.rand(2)
         self.velocity = np.random.rand(2) * 2 - 1
@@ -88,6 +99,7 @@ class LinearTrackingEnv(gym.Env):
         else:
             self.visualization[tuple(self.beam)] = self.SEARCH
             self.visualization[tuple(self.cell)] = self.TARGET
+        self._vis_pos = self.position
 
     def _update_beam(self, action):
         self.beam[0] = action % self.grid_size
@@ -104,8 +116,35 @@ class LinearTrackingEnv(gym.Env):
             return True
         else:
             return False
-        
+
     def _update_observation(self):
         self.obs[:2] = self.position
         self.obs[2:] = self.velocity
 
+
+class LinearTrackingSmooth(LinearTrackingDiscrete):
+    def __init__(self, grid_size=5, time_delta=0.1):
+        super(LinearTrackingSmooth, self).__init__(grid_size, time_delta)
+
+    def step(self, action):
+        self._update_beam(action)
+
+        reward = self._get_reward()
+
+        self._update_visualization()
+
+        self._move_target()
+        self._update_observation()
+
+        if self._target_out():
+            done = True
+        else:
+            done = False
+
+        self._n_obs += 1
+        return self.obs, reward, done, {}
+
+    def _get_reward(self):
+        beam_pos = (self.beam / self.grid_size) + self.cell_size / 2
+        distance = np.linalg.norm(beam_pos - self.position)
+        return -distance**2
