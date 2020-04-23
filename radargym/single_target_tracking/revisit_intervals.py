@@ -1,7 +1,7 @@
 import gym
 from gym import spaces
-from radarsim.simulation import TrackingSimulation
-from radarsim.common.trigonometrics import pos_to_angle_error_2D, pos_to_radius_error_2D
+from trackingsimpy.simulation.revisit_interval import BaselineKalman
+from trackingsimpy.common.trigonometrics import pos_to_angle_error_2D
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -86,13 +86,13 @@ class Renderer(object):
             self.ax_ae.autoscale_view()
 
     def _target_pos(self):
-        return self.sim.target.x.flatten()[[0, 2]]
+        return self.sim.target.position
 
     def _prediction_pos(self):
-        return self.sim.tracker_computer.tracker.x_prior.flatten()[[0, 2]]
+        return self.sim.tracker.x_prior.flatten()[[0, 2]]
 
     def _measurement_pos(self):
-        return self.sim.tracker_computer.z.flatten()
+        return self.sim.computer.z.flatten()
 
 
 class RevisitIntervalDiscrete(gym.Env):
@@ -102,17 +102,14 @@ class RevisitIntervalDiscrete(gym.Env):
     N_OBS = 10
     C_LOW = 0.1  # lower limit multiplier for beamwidth
     C_HIGH = 1  # higher limit multiplier for beamwidth
+    P_LOSS = 5000
 
     def __init__(self):
-        self.sim = TrackingSimulation(
-            n_max=20,
-            traj_idx=np.random.randint(5),
-            variance=50,
+        self.sim = BaselineKalman(
+            traj_idx=4,
+            var=1000,
             k_min=self.RI_MIN,
-            k_max=self.RI_MAX,
-            p_loss=10000,
-            save=False,
-            beamwidth=0.025
+            k_max=self.RI_MAX
         )
         self.revisit_interval = 1
         self.angle_error = 0
@@ -148,9 +145,8 @@ class RevisitIntervalDiscrete(gym.Env):
 
     def _observation(self, update_successful):
         if update_successful:
-            H = self.sim.tracker_computer.tracker.H
-            pos = H @ self.sim.target.x.flatten()
-            pos_est = H @ self.sim.tracker_computer.tracker.x.flatten()
+            pos = self.sim.target.position
+            pos_est = self.sim.tracker.H @ self.sim.tracker.x.flatten()
 
             self.angle_error = pos_to_angle_error_2D(pos, pos_est)
             return self._discretize(self.angle_error, is_lost=False)
@@ -161,7 +157,7 @@ class RevisitIntervalDiscrete(gym.Env):
         if update_successful:
             return - (n_missed + 1) / revisit_interval
         else:
-            return - self.sim.p_loss
+            return - self.P_LOSS
 
     def action2ri(self, action):
         return int((action * self.RI_MAX + (self.N_ACTS - action - 1) * self.RI_MIN) / (self.N_ACTS - 1))
@@ -194,15 +190,12 @@ class RevisitIntervalContinuous(gym.Env):
     N_ACTS = 10
 
     def __init__(self):
-        self.sim = TrackingSimulation(
-            n_max=20,
-            traj_idx=2,
-            variance=50,
-            k_min=self.RI_MIN,
-            k_max=self.RI_MAX,
-            p_loss=5000,
+        self.sim = BaselineKalman(
             save=False,
-            beamwidth=0.025
+            traj_idx=4,
+            var=1000,
+            k_min=self.RI_MIN,
+            k_max=self.RI_MAX
         )
 
         self.revisit_interval = 1
