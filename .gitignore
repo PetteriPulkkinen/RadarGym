@@ -1,3 +1,4 @@
 .vscode/**/*
-radar_gym.egg-info/**/*
+.idea/*
 **/__pycache__/**/*
+radargym.egg-info/**/*

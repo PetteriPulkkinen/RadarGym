@@ -155,7 +155,8 @@ class RevisitIntervalDiscrete(gym.Env):
 
     def _reward(self, update_successful, n_missed, revisit_interval):
         if update_successful:
-            return - (n_missed + 1) / revisit_interval
+            #  return - (n_missed + 1) / (revisit_interval * self.sim.computer.n_max)
+            return - 1 / revisit_interval
         else:
             return - self.P_LOSS
 
