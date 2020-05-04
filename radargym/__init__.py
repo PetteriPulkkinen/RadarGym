@@ -16,14 +16,14 @@ register(
     id='revisit-v00',
     entry_point='radargym.single_target_tracking:RevisitIntervalDiscrete',
     kwargs={
-        'sim': BaselineKalman(traj_idx=4, var=1e3),
+        'sim': BaselineKalman(traj_idx=2, var=1e3),
         'p_loss': 5000,
         'n_obs': 10,
         'n_act': 10,
-        'g_low': 0.1,
-        'g_high': 1.0,
+        'g_low': 0.5,
+        'g_high': 1.25,
         'ri_min': 1,
-        'ri_max': 100,
+        'ri_max': 250,
     }
 )
 
@@ -46,15 +46,16 @@ register(
     id='revisit-v02',
     entry_point='radargym.single_target_tracking:RevisitIntervalDiscrete',
     kwargs={
-        'sim': BaselineKalman(traj_idx=4, var=1e3),
+        'sim': BaselineKalman(traj_idx=2, var=1e3),
         'p_loss': 5000,
         'n_obs': 10,
         'n_act': 10,
-        'g_low': 0.1,
-        'g_high': 1.0,
+        'g_low': 0.5,
+        'g_high': 1.25,
         'ri_min': 1,
-        'ri_max': 100,
-        'is_pomdp': True
+        'ri_max': 250,
+        'is_pomdp': True,
+        'alpha': 0.92
     }
 )
 
@@ -62,7 +63,7 @@ register(
     id='revisit-v10',
     entry_point='radargym.single_target_tracking:RevisitIntervalContinuous',
     kwargs={
-        'sim': BaselineKalman(traj_idx=4, var=1e3),
+        'sim': BaselineKalman(traj_idx=2, var=1e3),
         'p_loss': 5000,
         'n_act': 10,
         'ri_min': 1,

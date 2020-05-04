@@ -14,7 +14,7 @@ class BaseRevisitInterval(gym.Env):
         self.n_act = n_act
 
         self.angle_error = 0
-        self.alpha = 0.9
+        self.alpha = 0.994
 
         self.action_space = spaces.Discrete(self.n_act)  # Discretized revisit interval values
 
