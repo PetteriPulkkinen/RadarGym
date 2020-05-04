@@ -10,6 +10,6 @@ setup(name='RadarGym',
       licence='MIT',
       packages=find_namespace_packages(),
       install_requires=[
-            'numpy', 'gym'
+            'numpy', 'gym', 'trackingsimpy'
       ],
       zip_safe=False)
