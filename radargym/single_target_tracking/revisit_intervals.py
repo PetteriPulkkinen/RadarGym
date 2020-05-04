@@ -4,34 +4,30 @@ from trackingsimpy.common.trigonometrics import pos_to_angle_error_2D
 import numpy as np
 
 
-class RevisitIntervalDiscrete(gym.Env):
-    def __init__(self, sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_obs=10, g_low=0.1, g_high=1):
+class BaseRevisitInterval(gym.Env):
+    def __init__(self, sim, p_loss, ri_min, ri_max, n_act):
+        super(BaseRevisitInterval, self).__init__()
         self.sim = sim
         self.p_loss = p_loss
         self.ri_min = ri_min
         self.ri_max = ri_max
         self.n_act = n_act
-        self.n_obs = n_obs
-        self.g_low = g_low
-        self.g_high = g_high
 
-        self.revisit_interval = 1
         self.angle_error = 0
+        self.alpha = 0.9
 
-        self.observation_space = spaces.Discrete(self.n_obs)  # Discretized theta values
         self.action_space = spaces.Discrete(self.n_act)  # Discretized revisit interval values
-
-        super().__init__()
 
     def reset(self):
         self.sim.reset()
-        return self._observation(update_successful=True)
+        self.angle_error = 0
+        return self._observation(update_successful=True, revisit_interval=1)
 
     def step(self, action):
-        self.revisit_interval = self.action2ri(action)
-        update_successful, _, trajectory_ends = self.sim.step(self.revisit_interval)
-        obs = self._observation(update_successful)
-        reward = self._reward(update_successful, self.revisit_interval)
+        revisit_interval = self.action2ri(action)
+        update_successful, _, trajectory_ends = self.sim.step(revisit_interval)
+        obs = self._observation(update_successful, revisit_interval)
+        reward = self._reward(update_successful, revisit_interval)
 
         if trajectory_ends or not update_successful:
             done = True
@@ -42,15 +38,11 @@ class RevisitIntervalDiscrete(gym.Env):
     def render(self, mode='human'):
         pass
 
-    def _observation(self, update_successful):
-        if update_successful:
-            pos = self.sim.target.position
-            pos_est = self.sim.radar.H @ self.sim.tracker.x.flatten()
+    def action2ri(self, action):
+        return int((action * self.ri_max + (self.n_act - action - 1) * self.ri_min) / (self.n_act - 1))
 
-            self.angle_error = pos_to_angle_error_2D(pos, pos_est)
-            return self._discretize(self.angle_error, is_lost=False)
-        else:
-            return self._discretize(np.pi, is_lost=True)
+    def _observation(self, update_successful, revisit_interval):
+        raise NotImplementedError
 
     def _reward(self, update_successful, revisit_interval):
         if update_successful:
@@ -58,8 +50,34 @@ class RevisitIntervalDiscrete(gym.Env):
         else:
             return - self.p_loss
 
-    def action2ri(self, action):
-        return int((action * self.ri_max + (self.n_act - action - 1) * self.ri_min) / (self.n_act - 1))
+
+class RevisitIntervalDiscrete(BaseRevisitInterval):
+
+    def __init__(self,
+                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_obs=10, g_low=0.1, g_high=1, is_pomdp=False):
+        super().__init__(sim, p_loss, ri_min, ri_max, n_act)
+        self.n_obs = n_obs
+        self.g_low = g_low
+        self.g_high = g_high
+        self.is_pomdp = is_pomdp
+
+        self.observation_space = spaces.Discrete(self.n_obs)  # Discretized theta values
+
+    def _observation(self, update_successful, revisit_interval):
+        if update_successful:
+            pos = self.sim.target.position
+            pos_est = self.sim.radar.H @ self.sim.tracker.x.flatten()
+
+            if self.is_pomdp:
+                angle_error = self.sim.computer.theta
+                self.angle_error = \
+                    self.angle_error * self.alpha**revisit_interval + (1-self.alpha**revisit_interval) * angle_error
+                angle_obs = np.abs(self.angle_error)
+            else:
+                angle_obs = np.abs(pos_to_angle_error_2D(pos, pos_est))
+            return self._discretize(angle_obs, is_lost=False)
+        else:
+            return self._discretize(np.pi, is_lost=True)
 
     def _discretize(self, theta, is_lost):
         b_low = self.g_low * self.sim.radar.beamwidth
@@ -81,3 +99,19 @@ class RevisitIntervalDiscrete(gym.Env):
             return self.n_obs - 2
         else:
             return np.argmin(booleans == False)
+
+
+class RevisitIntervalContinuous(BaseRevisitInterval):
+    def __init__(self, sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10):
+        super().__init__(sim, p_loss, ri_min, ri_max, n_act)
+        self.observation_space = spaces.Box(low=0, high=np.pi, shape=(1,), dtype=float)
+
+    def _observation(self, update_successful, revisit_interval):
+        if update_successful:
+            pos = self.sim.target.position
+            pos_est = self.sim.radar.H @ self.sim.tracker.x.flatten()
+
+            self.angle_error = np.abs(pos_to_angle_error_2D(pos, pos_est))
+            return np.array([self.angle_error])
+        else:
+            return np.array([np.pi])

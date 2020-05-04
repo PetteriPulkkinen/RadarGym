@@ -1,4 +1,4 @@
 from radargym.single_target_tracking.linear_tracking_env import LinearTrackingDiscrete
 from radargym.single_target_tracking.linear_tracking_env import LinearTrackingSmooth
 from radargym.single_target_tracking.revisit_intervals import RevisitIntervalDiscrete
-
+from radargym.single_target_tracking.revisit_intervals import RevisitIntervalContinuous
