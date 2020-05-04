@@ -54,8 +54,7 @@ register(
         'g_high': 1.25,
         'ri_min': 1,
         'ri_max': 250,
-        'is_pomdp': True,
-        'alpha': 0.92
+        'is_pomdp': True
     }
 )
 
