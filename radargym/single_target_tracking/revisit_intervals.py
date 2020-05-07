@@ -101,6 +101,44 @@ class RevisitIntervalDiscrete(BaseRevisitInterval):
             return np.argmin(booleans == False)
 
 
+class MMRevisitIntervalDiscrete(BaseRevisitInterval):
+
+    def __init__(self,
+                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_obs=10, g_low=0.1, g_high=1):
+        super().__init__(sim, p_loss, ri_min, ri_max, n_act)
+        self.n_obs = n_obs
+        self.g_low = g_low
+        self.g_high = g_high
+        assert(self.sim.tracker.mu.size == 2)
+
+        self.observation_space = spaces.Discrete(self.n_obs)  # Discretized mu values
+
+    def _observation(self, update_successful, revisit_interval):
+        if update_successful:
+            mu = self.sim.tracker.mu[0]
+            return self._discretize(mu, is_lost=False)
+        else:
+            return self._discretize(0, is_lost=True)
+
+    def _discretize(self, mu, is_lost):
+        if is_lost:
+            return self.n_obs - 1
+
+        n = np.arange(0, self.n_obs - 2)
+        b = self.g_low
+        a = (self.g_high - self.g_low) / (self.n_obs - 3)
+
+        f = a * n + b
+
+        booleans = (f >= mu)
+        if booleans.sum() == self.n_obs - 2:
+            return 0
+        elif booleans.sum() == 0:
+            return self.n_obs - 2
+        else:
+            return np.argmin(booleans == False)
+
+
 class RevisitIntervalContinuous(BaseRevisitInterval):
     def __init__(self, sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10):
         super().__init__(sim, p_loss, ri_min, ri_max, n_act)
@@ -115,3 +153,4 @@ class RevisitIntervalContinuous(BaseRevisitInterval):
             return np.array([self.angle_error])
         else:
             return np.array([np.pi])
+
