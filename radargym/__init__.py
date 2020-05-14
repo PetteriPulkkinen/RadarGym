@@ -1,6 +1,6 @@
 from gym.envs.registration import register
 from trackingsimpy.simulation.revisit_interval import DefinedIMM, BaselineKalman, DefinedCVCAIMM
-from trackingsimpy.simulation.revisit_interval import DefinedKalman, BenchmarkWithKalmanFilter
+from trackingsimpy.simulation.revisit_interval import DefinedKalman, IMMBenchmark
 
 
 register(
@@ -78,6 +78,24 @@ register(
 register(
     id='revisit-v04',
     entry_point='radargym.single_target_tracking:RevisitIntervalBenchmarkDiscrete',
+    kwargs={
+        'sims': [
+                    BaselineKalman(
+                        n_max=20,
+                        var=(4.5 * 9.81) ** 2,
+                        traj_idx=idx,
+                        P0=None,
+                        beamwidth=0.02,
+                        pfa=1e-6,
+                        sn0=50) for idx in range(6)],
+        'p_loss': 100,
+        'ri_min': 1,
+        'ri_max': 250,
+        'n_act': 10,
+        'n_obs': 10,
+        'g_low': 0.5,
+        'g_high': 1.25
+    }
 )
 
 register(
@@ -158,7 +176,6 @@ register(
 )
 
 
-
 register(
     id='revisit-v30',
     entry_point='radargym.single_target_tracking:MMRevisitIntervalDiscrete',
@@ -171,5 +188,20 @@ register(
         'g_high': 0.8,
         'ri_min': 1,
         'ri_max': 100,
+    }
+)
+
+register(
+    id='revisit-v20',
+    entry_point='radargym.single_target_tracking:RevisitIntervalBenchmarkDiscrete',
+    kwargs={
+        'sims': [IMMBenchmark(traj_idx=idx) for idx in range(6)],
+        'p_loss': 100,
+        'ri_min': 1,
+        'ri_max': 75,
+        'n_act': 10,
+        'n_obs': 10,
+        'g_low': 0.25,
+        'g_high': 1.25
     }
 )

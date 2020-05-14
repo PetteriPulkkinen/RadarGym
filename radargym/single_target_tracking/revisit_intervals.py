@@ -162,19 +162,18 @@ class RevisitIntervalContinuous(BaseRevisitInterval):
 
 
 class RevisitIntervalBenchmarkDiscrete(RevisitIntervalDiscrete):
-    def __init__(self):
-        super().__init__(sim=None, p_loss=100, ri_min=1, ri_max=250, n_act=10, n_obs=10, g_low=0.5, g_high=1.25)
-        self._sims = list()
-        for idx in range(6):
-            self._sims.append(
-                BaselineKalman(
-                    n_max=20,
-                    var=(4.5 * 9.81) ** 2,
-                    traj_idx=idx,
-                    P0=None,
-                    beamwidth=0.02,
-                    pfa=1e-6,
-                    sn0=50))
+    def __init__(self, sims, p_loss, ri_min, ri_max, n_act, n_obs, g_low, g_high):
+        super().__init__(
+            sim=None,
+            p_loss=p_loss,
+            ri_min=ri_min,
+            ri_max=ri_max,
+            n_act=n_act,
+            n_obs=n_obs,
+            g_low=g_low,
+            g_high=g_high
+        )
+        self._sims = sims
         self._traj_idx = None
         self._freeze = False
 
@@ -187,6 +186,7 @@ class RevisitIntervalBenchmarkDiscrete(RevisitIntervalDiscrete):
 
     def freeze(self, traj_idx):
         self._traj_idx = traj_idx
+        self.sim = self._sims[self._traj_idx]
         self._freeze = True
 
     def unfreeze(self):
