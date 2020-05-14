@@ -3,3 +3,4 @@ from radargym.single_target_tracking.linear_tracking_env import LinearTrackingSm
 from radargym.single_target_tracking.revisit_intervals import RevisitIntervalDiscrete
 from radargym.single_target_tracking.revisit_intervals import MMRevisitIntervalDiscrete
 from radargym.single_target_tracking.revisit_intervals import RevisitIntervalContinuous
+from radargym.single_target_tracking.revisit_intervals import RevisitIntervalBenchmarkDiscrete

@@ -1,6 +1,7 @@
 import gym
 from gym import spaces
 from trackingsimpy.common.trigonometrics import pos_to_angle_error_2D
+from trackingsimpy.simulation.revisit_interval import BaselineKalman
 import numpy as np
 
 
@@ -25,9 +26,9 @@ class BaseRevisitInterval(gym.Env):
 
     def step(self, action):
         revisit_interval = self.action2ri(action)
-        update_successful, _, trajectory_ends = self.sim.step(revisit_interval)
+        update_successful, n_missed, trajectory_ends = self.sim.step(revisit_interval)
         obs = self._observation(update_successful, revisit_interval)
-        reward = self._reward(update_successful, revisit_interval)
+        reward = self._reward(update_successful, revisit_interval, n_missed)
 
         if trajectory_ends or not update_successful:
             done = True
@@ -44,9 +45,9 @@ class BaseRevisitInterval(gym.Env):
     def _observation(self, update_successful, revisit_interval):
         raise NotImplementedError
 
-    def _reward(self, update_successful, revisit_interval):
+    def _reward(self, update_successful, revisit_interval, n_missed):
         if update_successful:
-            return - 1 / revisit_interval
+            return - (1 + n_missed) / revisit_interval
         else:
             return - self.p_loss
 
@@ -54,12 +55,14 @@ class BaseRevisitInterval(gym.Env):
 class RevisitIntervalDiscrete(BaseRevisitInterval):
 
     def __init__(self,
-                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_obs=10, g_low=0.1, g_high=1, is_pomdp=False):
+                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_obs=10, g_low=0.1, g_high=1, is_pomdp=False,
+                 noisy_obs=False):
         super().__init__(sim, p_loss, ri_min, ri_max, n_act)
         self.n_obs = n_obs
         self.g_low = g_low
         self.g_high = g_high
         self.is_pomdp = is_pomdp
+        self.noisy_obs = noisy_obs
 
         self.observation_space = spaces.Discrete(self.n_obs)  # Discretized theta values
 
@@ -74,7 +77,10 @@ class RevisitIntervalDiscrete(BaseRevisitInterval):
                     self.angle_error * self.alpha**revisit_interval + (1-self.alpha**revisit_interval) * angle_error
                 angle_obs = np.abs(self.angle_error)
             else:
-                angle_obs = np.abs(pos_to_angle_error_2D(pos, pos_est))
+                if self.noisy_obs:
+                    angle_obs = np.abs(self.sim.computer.theta)
+                else:
+                    angle_obs = np.abs(pos_to_angle_error_2D(pos, pos_est))
             return self._discretize(angle_obs, is_lost=False)
         else:
             return self._discretize(np.pi, is_lost=True)
@@ -154,3 +160,34 @@ class RevisitIntervalContinuous(BaseRevisitInterval):
         else:
             return np.array([np.pi])
 
+
+class RevisitIntervalBenchmarkDiscrete(RevisitIntervalDiscrete):
+    def __init__(self):
+        super().__init__(sim=None, p_loss=100, ri_min=1, ri_max=250, n_act=10, n_obs=10, g_low=0.5, g_high=1.25)
+        self._sims = list()
+        for idx in range(6):
+            self._sims.append(
+                BaselineKalman(
+                    n_max=20,
+                    var=(4.5 * 9.81) ** 2,
+                    traj_idx=idx,
+                    P0=None,
+                    beamwidth=0.02,
+                    pfa=1e-6,
+                    sn0=50))
+        self._traj_idx = None
+        self._freeze = False
+
+    def reset(self):
+        if not self._freeze:
+            self._traj_idx = np.random.randint(6)
+        self.sim = self._sims[self._traj_idx]
+
+        return super().reset()
+
+    def freeze(self, traj_idx):
+        self._traj_idx = traj_idx
+        self._freeze = True
+
+    def unfreeze(self):
+        self._freeze = False
