@@ -205,3 +205,18 @@ register(
         'g_high': 1.25
     }
 )
+
+register(
+    id='revisit-v21',
+    entry_point='radargym.single_target_tracking:MMRevisitIntervalBenchmarkDiscrete',
+    kwargs={
+        'sims': [IMMBenchmark(traj_idx=idx) for idx in range(6)],
+        'p_loss': 100,
+        'ri_min': 1,
+        'ri_max': 75,
+        'n_act': 10,
+        'n_obs': 10,
+        'g_low': 0.05,
+        'g_high': 0.95
+    }
+)

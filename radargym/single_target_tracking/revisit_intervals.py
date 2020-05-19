@@ -115,7 +115,6 @@ class MMRevisitIntervalDiscrete(BaseRevisitInterval):
         self.n_obs = n_obs
         self.g_low = g_low
         self.g_high = g_high
-        assert(self.sim.tracker.mu.size == 2)
 
         self.observation_space = spaces.Discrete(self.n_obs)  # Discretized mu values
 
@@ -162,6 +161,38 @@ class RevisitIntervalContinuous(BaseRevisitInterval):
 
 
 class RevisitIntervalBenchmarkDiscrete(RevisitIntervalDiscrete):
+    def __init__(self, sims, p_loss, ri_min, ri_max, n_act, n_obs, g_low, g_high):
+        super().__init__(
+            sim=None,
+            p_loss=p_loss,
+            ri_min=ri_min,
+            ri_max=ri_max,
+            n_act=n_act,
+            n_obs=n_obs,
+            g_low=g_low,
+            g_high=g_high
+        )
+        self._sims = sims
+        self._traj_idx = None
+        self._freeze = False
+
+    def reset(self):
+        if not self._freeze:
+            self._traj_idx = np.random.randint(6)
+        self.sim = self._sims[self._traj_idx]
+
+        return super().reset()
+
+    def freeze(self, traj_idx):
+        self._traj_idx = traj_idx
+        self.sim = self._sims[self._traj_idx]
+        self._freeze = True
+
+    def unfreeze(self):
+        self._freeze = False
+
+
+class MMRevisitIntervalBenchmarkDiscrete(MMRevisitIntervalDiscrete):
     def __init__(self, sims, p_loss, ri_min, ri_max, n_act, n_obs, g_low, g_high):
         super().__init__(
             sim=None,
