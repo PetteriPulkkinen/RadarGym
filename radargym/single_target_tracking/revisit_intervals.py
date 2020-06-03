@@ -34,7 +34,7 @@ class BaseRevisitInterval(gym.Env):
             done = True
         else:
             done = False
-        return obs, reward, done, {}
+        return obs, reward, done, {'te': trajectory_ends, 'us': update_successful}
 
     def render(self, mode='human'):
         pass
@@ -47,7 +47,7 @@ class BaseRevisitInterval(gym.Env):
 
     def _reward(self, update_successful, revisit_interval, n_missed):
         if update_successful:
-            return - (1 + n_missed) / revisit_interval
+            return - (1 + n_missed) / revisit_interval * self.sim.radar.dwell_time / self.sim.DT
         else:
             return - self.p_loss
 
