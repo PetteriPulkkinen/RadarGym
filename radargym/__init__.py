@@ -201,8 +201,8 @@ register(
         'ri_max': 75,
         'n_act': 10,
         'n_obs': 10,
-        'g_low': 0.25,
-        'g_high': 1.25
+        'g_low': 0.05,
+        'g_high': 0.5
     }
 )
 
