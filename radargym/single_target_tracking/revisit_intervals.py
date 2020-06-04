@@ -1,8 +1,24 @@
 import gym
 from gym import spaces
 from trackingsimpy.common.trigonometrics import pos_to_angle_error_2D
-from trackingsimpy.simulation.revisit_interval import BaselineKalman
 import numpy as np
+
+
+def discretize(value, N, low_lim, high_lim):
+    n = np.arange(0, N-1)
+    b = low_lim
+    a = (high_lim - low_lim) / (N - 2)
+
+    f = a * n + b
+
+    booleans = (f > value)
+
+    if booleans.sum() == N-1:
+        return 0
+    elif booleans.sum() == 0:
+        return N-1
+    else:
+        return np.argmin((f > value) == False)
 
 
 class BaseRevisitInterval(gym.Env):
@@ -18,13 +34,16 @@ class BaseRevisitInterval(gym.Env):
         self.alpha = 0.994
 
         self.action_space = spaces.Discrete(self.n_act)  # Discretized revisit interval values
+        self.action = 0
 
     def reset(self):
         self.sim.reset()
         self.angle_error = 0
-        return self._observation(update_successful=True, revisit_interval=1)
+        self.action = 0
+        return self._observation(update_successful=True, revisit_interval=0)
 
     def step(self, action):
+        self.action = action
         revisit_interval = self.action2ri(action)
         update_successful, n_missed, trajectory_ends = self.sim.step(revisit_interval)
         obs = self._observation(update_successful, revisit_interval)
@@ -55,99 +74,98 @@ class BaseRevisitInterval(gym.Env):
 class RevisitIntervalDiscrete(BaseRevisitInterval):
 
     def __init__(self,
-                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_obs=10, g_low=0.1, g_high=1, is_pomdp=False,
-                 noisy_obs=False):
+                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_discretize=10, n_act=10, g_low=0.1, g_high=1,
+                 is_pomdp=False, noisy_obs=False, multi_dim_obs=False):
         super().__init__(sim, p_loss, ri_min, ri_max, n_act)
-        self.n_obs = n_obs
         self.g_low = g_low
         self.g_high = g_high
         self.is_pomdp = is_pomdp
         self.noisy_obs = noisy_obs
+        self.multi_dim_obs = multi_dim_obs
+        self.n_discretize = n_discretize
+
+        if self.multi_dim_obs:
+            self.n_obs = n_discretize * n_act + 2  # Discretized values * number of actions + initial + lost
+        else:
+            self.n_obs = self.n_discretize + 2  # Discretized values + initial + lost
 
         self.observation_space = spaces.Discrete(self.n_obs)  # Discretized theta values
 
     def _observation(self, update_successful, revisit_interval):
-        if update_successful:
-            pos = self.sim.target.position
-            pos_est = self.sim.radar.H @ self.sim.tracker.x.flatten()
-
-            if self.is_pomdp:
-                angle_error = self.sim.computer.theta
-                self.angle_error = \
-                    self.angle_error * self.alpha**revisit_interval + (1-self.alpha**revisit_interval) * angle_error
-                angle_obs = np.abs(self.angle_error)
-            else:
-                if self.noisy_obs:
-                    angle_obs = np.abs(self.sim.computer.theta)
-                else:
-                    angle_obs = np.abs(pos_to_angle_error_2D(pos, pos_est))
-            return self._discretize(angle_obs, is_lost=False)
-        else:
-            return self._discretize(np.pi, is_lost=True)
-
-    def _discretize(self, theta, is_lost):
-        b_low = self.g_low * self.sim.radar.beamwidth
-        b_high = self.g_high * self.sim.radar.beamwidth
-
-        if is_lost:
+        if not update_successful and revisit_interval == 0:
+            raise RuntimeError('Update not successful and revisit interval is 0.')
+        if revisit_interval == 0:
+            return self.n_obs - 2
+        if not update_successful:
             return self.n_obs - 1
 
-        n = np.arange(0, self.n_obs - 2)
-        b = b_low
-        a = (b_high - b_low) / (self.n_obs - 3)
+        pos = self.sim.target.position
+        pos_est = self.sim.radar.H @ self.sim.tracker.x.flatten()
 
-        f = a * n + b
-
-        booleans = (f >= theta)
-        if booleans.sum() == self.n_obs - 2:
-            return 0
-        elif booleans.sum() == 0:
-            return self.n_obs - 2
+        if self.is_pomdp:
+            angle_error = self.sim.computer.theta
+            self.angle_error = \
+                self.angle_error * self.alpha**revisit_interval + (1-self.alpha**revisit_interval) * angle_error
+            angle_obs = np.abs(self.angle_error)
         else:
-            return np.argmin(booleans == False)
+            if self.noisy_obs:
+                angle_obs = np.abs(self.sim.computer.theta)
+            else:
+                angle_obs = np.abs(pos_to_angle_error_2D(pos, pos_est))
+
+        low_lim = self.g_low * self.sim.radar.beamwidth
+        high_lim = self.g_high * self.sim.radar.beamwidth
+        obs1 = discretize(angle_obs, self.n_discretize, low_lim, high_lim)
+        if self.multi_dim_obs:
+            obs2 = self.action
+            return obs1*self.n_discretize + obs2
+        else:
+
+            return obs1
 
 
 class MMRevisitIntervalDiscrete(BaseRevisitInterval):
 
     def __init__(self,
-                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_obs=10, g_low=0.1, g_high=1):
+                 sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10, n_discretize=10,
+                 g_low=0.1, g_high=1, multi_dim_obs=False):
         super().__init__(sim, p_loss, ri_min, ri_max, n_act)
-        self.n_obs = n_obs
         self.g_low = g_low
         self.g_high = g_high
+
+        self.multi_dim_obs = multi_dim_obs
+        self.n_discretize = n_discretize
+
+        if self.multi_dim_obs:
+            self.n_obs = n_discretize * n_act + 2  # Discretized values * number of actions + initial + lost
+        else:
+            self.n_obs = self.n_discretize + 2  # Discretized values + initial + lost
 
         self.observation_space = spaces.Discrete(self.n_obs)  # Discretized mu values
 
     def _observation(self, update_successful, revisit_interval):
-        if update_successful:
-            mu = self.sim.tracker.mu[0]
-            return self._discretize(mu, is_lost=False)
-        else:
-            return self._discretize(0, is_lost=True)
-
-    def _discretize(self, mu, is_lost):
-        if is_lost:
+        if not update_successful and revisit_interval == 0:
+            raise RuntimeError('Update not successful and revisit interval is 0.')
+        if revisit_interval == 0:
+            return self.n_obs - 2
+        if not update_successful:
             return self.n_obs - 1
 
-        n = np.arange(0, self.n_obs - 2)
-        b = self.g_low
-        a = (self.g_high - self.g_low) / (self.n_obs - 3)
-
-        f = a * n + b
-
-        booleans = (f >= mu)
-        if booleans.sum() == self.n_obs - 2:
-            return 0
-        elif booleans.sum() == 0:
-            return self.n_obs - 2
+        mu = self.sim.tracker.mu[0]
+        obs1 = discretize(mu, self.n_discretize, self.g_low, self.g_high)
+        if self.multi_dim_obs:
+            obs2 = self.action
+            return obs1*self.n_discretize + obs2
         else:
-            return np.argmin(booleans == False)
+
+            return obs1
 
 
 class RevisitIntervalContinuous(BaseRevisitInterval):
     def __init__(self, sim=None, p_loss=5000, ri_min=1, ri_max=100, n_act=10):
         super().__init__(sim, p_loss, ri_min, ri_max, n_act)
         self.observation_space = spaces.Box(low=0, high=np.pi, shape=(1,), dtype=float)
+        raise NotImplementedError
 
     def _observation(self, update_successful, revisit_interval):
         if update_successful:
@@ -161,16 +179,17 @@ class RevisitIntervalContinuous(BaseRevisitInterval):
 
 
 class RevisitIntervalBenchmarkDiscrete(RevisitIntervalDiscrete):
-    def __init__(self, sims, p_loss, ri_min, ri_max, n_act, n_obs, g_low, g_high):
+    def __init__(self, sims, p_loss, ri_min, ri_max, n_act, n_discretize, g_low, g_high, multi_dim_obs=False):
         super().__init__(
             sim=None,
             p_loss=p_loss,
             ri_min=ri_min,
             ri_max=ri_max,
             n_act=n_act,
-            n_obs=n_obs,
+            n_discretize=n_discretize,
             g_low=g_low,
-            g_high=g_high
+            g_high=g_high,
+            multi_dim_obs=multi_dim_obs
         )
         self._sims = sims
         self._traj_idx = None
@@ -193,16 +212,17 @@ class RevisitIntervalBenchmarkDiscrete(RevisitIntervalDiscrete):
 
 
 class MMRevisitIntervalBenchmarkDiscrete(MMRevisitIntervalDiscrete):
-    def __init__(self, sims, p_loss, ri_min, ri_max, n_act, n_obs, g_low, g_high):
+    def __init__(self, sims, p_loss, ri_min, ri_max, n_act, n_discretize, g_low, g_high, multi_dim_obs=False):
         super().__init__(
             sim=None,
             p_loss=p_loss,
             ri_min=ri_min,
             ri_max=ri_max,
             n_act=n_act,
-            n_obs=n_obs,
+            n_discretize=n_discretize,
             g_low=g_low,
-            g_high=g_high
+            g_high=g_high,
+            multi_dim_obs=multi_dim_obs
         )
         self._sims = sims
         self._traj_idx = None
