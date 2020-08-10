@@ -252,3 +252,31 @@ register(
         'multi_dim_obs': True
     }
 )
+
+register(
+    id='revisit-v24',
+    entry_point='radargym.single_target_tracking:CommonRevisitInterval',
+    kwargs={
+        'sims': [IMMBenchmark(traj_idx=idx) for idx in range(6)],
+        'c_loss': 0.2,
+        'observations': {
+            'mode_probability': {
+                'nq': 10,
+                'lb': 0.05,
+                'ub': 0.95
+            },
+            'range': {
+                'nq': 10,
+                'lb': 25e3,
+                'ub': 85e3
+            }
+        },
+        'actions': {
+            'act_type': 'direct',
+            'tmax': 7.5,
+            'tmin': 0.1,
+            'n_acts': 10
+        },
+        'rewards': None
+    }
+)
